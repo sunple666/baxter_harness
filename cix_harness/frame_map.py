@@ -95,6 +95,25 @@ def build_anchor(data):
             'limitations':'One point determines translation only with assumed rotation. No rotation, scale, camera alignment, transfer or motion validity established.'}
 
 
+def camera_yaw_candidate(base_camera_xyzw, policy_camera_xyzw, *, policy_image_flips_x):
+    """Match horizontal image-right headings, preserving gravity (yaw only).
+
+    The policy camera quaternion must use the simulator camera convention;
+    callers must explicitly account for horizontal preprocessing flips.
+    This does not fit full extrinsics or reconcile camera tilt/intrinsics.
+    """
+    if type(policy_image_flips_x) is not bool:raise ValueError('Declare horizontal flip explicitly')
+    real=rotate(quaternion(base_camera_xyzw),[1,0,0])
+    policy=rotate(quaternion(policy_camera_xyzw),[-1 if policy_image_flips_x else 1,0,0])
+    if min(math.hypot(*real[:2]),math.hypot(*policy[:2]))<.1:
+        raise ValueError('Image-right heading is too vertical to define yaw')
+    angle=math.atan2(policy[1],policy[0])-math.atan2(real[1],real[0])
+    angle=math.atan2(math.sin(angle),math.cos(angle))
+    return {'policy_from_base_xyzw':[0,0,math.sin(angle/2),math.cos(angle/2)],
+            'yaw_rad':angle,'commissioned':False,
+            'limitation':'Camera-heading hypothesis only; verify renderer and training preprocessing conventions.'}
+
+
 def main(argv=None):
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--references',required=True,help='Local JSON with paired TCP references and explicit tool conventions')

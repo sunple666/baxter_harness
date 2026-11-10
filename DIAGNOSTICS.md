@@ -2,6 +2,8 @@
 
 ## 构造候选坐标映射（纯离线）
 
+`frame_map.camera_yaw_candidate` 可按真实相机与策略相机的图像水平轴提出保留重力方向的 yaw 候选。必须显式声明策略图像是否经过水平翻转；LIBERO 渲染约定、LeRobot 环境图像翻转与真实相机光学系不能混为一谈。候选不是完整手眼标定。若采用约 180 度的世界轴转换，工具局部约定也必须一致处理；不要只反转动作 Y 或单独旋转状态。
+
 若目前只有一个参考点，可用 `frame_map --mode anchor`：输入 base_anchor_m、policy_anchor_m、明确假设的 policy_from_base_xyzw、tcp_offset_tool_m 和 reference_definition，工具仅计算 t=policy_anchor-R*base_anchor，绝不声称由一个点标定旋转。tool_frame_offset_xyzw 可单独指定，默认不额外旋转。已知真实距离保持不变，不做缩放。LIBERO 不同场景的桌高与原点可能不同，必须声明选定场景，不能把单一桌高当成整个混合检查点的通用值。
 
 `python3 -m cix_harness.frame_map --references config/frame-references.local.json --output runs/frame-candidate.local.json`

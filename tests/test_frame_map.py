@@ -1,10 +1,18 @@
 import math
 import unittest
-from cix_harness.frame_map import build,build_anchor
+from cix_harness.frame_map import build,build_anchor,camera_yaw_candidate
 from cix_harness.pi05_contract import rotate,state8
 
 
 class FrameMapTest(unittest.TestCase):
+    def test_camera_heading_includes_training_horizontal_flip(self):
+        q=[0,0,math.sin(math.pi/4),math.cos(math.pi/4)]
+        r=camera_yaw_candidate(q,q,policy_image_flips_x=True)
+        d=rotate(r['policy_from_base_xyzw'],[0,1,0])
+        self.assertAlmostEqual(d[1],-1)
+        r=camera_yaw_candidate(q,q,policy_image_flips_x=False)
+        self.assertAlmostEqual(r['yaw_rad'],0)
+        self.assertFalse(r['commissioned'])
     def test_single_anchor_preserves_axes_and_relative_distances(self):
         d={'reference_definition':'Synthetic hypothesis', 'base_anchor_m':[.8,.1,-.18],
            'policy_anchor_m':[0,0,.9],'policy_from_base_xyzw':[0,0,0,1],

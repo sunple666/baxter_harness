@@ -62,6 +62,16 @@ class BridgeTest(unittest.TestCase):
             self.robot.step("frame", ACTION_SPEC, [0]*7)
         self.robot.move.assert_called_once()
 
+    def test_diagnostic_preserves_gripper_without_command_position(self):
+        self.robot.cfg['commissioning_scope']='supervised_cartesian_diagnostic'
+        self.robot.motion_remaining=1
+        receipt=self.robot.diagnostic_step('frame',ACTION_SPEC,[0]*7)
+        self.assertTrue(receipt['preserve_gripper'])
+        self.robot.grip.command_position.assert_not_called()
+        self.robot.move.assert_called_once()
+        with self.assertRaises(RuntimeError):
+            self.robot.diagnostic_step('frame',ACTION_SPEC,[0]*7)
+
     def test_read_only_bridge_projects_without_commanding_hardware(self):
         self.robot.armed = False
         with self.assertRaises(RuntimeError):

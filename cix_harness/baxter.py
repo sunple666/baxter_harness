@@ -145,7 +145,13 @@ class Baxter:
                 "motion_remaining": getattr(self, "motion_remaining", None),
                 "motion_scope": self.cfg.get("commissioning_scope", "task_workspace"),
                 "arm": self.cfg["arm"], "action_spec": ACTION_SPEC,
-                "policy_to_base_xyzw": self.cfg.get("policy_to_base_xyzw")}
+                "policy_to_base_xyzw": self.cfg.get("policy_to_base_xyzw"),
+                "diagnostic_protocol": 1,
+                "diagnostic_config": {k:v for k,v in self.cfg.items() if k in (
+                    'arm','commissioned','commissioning_scope','workspace_min_m','workspace_max_m',
+                    'policy_to_base_xyzw','max_translation_m','max_rotation_rad','joint_speed_rad_s',
+                    'max_observation_age_s','motion_budget','diagnostic_origin_m','diagnostic_radius_m',
+                    'robot_clock_offset_s','contact_guard','ik_solver','arrival_position_tolerance_m')}}
 
     def ready(self):
         if time.monotonic() >= getattr(self,'lease_end',math.inf):
@@ -219,6 +225,10 @@ class Baxter:
         state["joint_names"] = names
         state["joint_rad"] = [angles[n] for n in names]
         obs = {"id": obs_id, "image": image, "state": state}
+        state['telemetry_age_s'] = {k: round(time.monotonic()-v, 4)
+                                    for k,v in getattr(self,'state_times',{}).items()}
+        state['gripper_age_s'] = round(time.monotonic()-effector[0],4)
+        state['camera_age_s'] = round(time.monotonic()-captured,4)
         wrist = getattr(self, "wrist_state", None)
         if wrist is not None and time.monotonic() - wrist[0] < 0.5:
             import cv2
@@ -275,6 +285,13 @@ class Baxter:
             from .task_guard import contact_bounds
             floor=contact_bounds(self.cfg['contact_guard'],list(map(float,new_quat)))['minimum_eef_z_m']
             new_xyz[2]=max(new_xyz[2],floor+.003)
+        self.audit('action_transform', requested_action=action,
+                   limited_policy_xyz_m=limit_norm(action[:3],self.cfg.get('max_translation_m',.01)),
+                   limited_policy_rpy_rad=limit_norm(action[3:6],self.cfg.get('max_rotation_rad',.05)),
+                   policy_to_base_xyzw=axis, base_delta_before_projection_m=list(map(float,delta)),
+                   endpoint_before_m=xyz, endpoint_before_xyzw=orientation,
+                   endpoint_target_m=list(map(float,new_xyz)), endpoint_target_xyzw=list(map(float,new_quat)),
+                   table_projection_requested=project_table)
         if enforce_workspace:
             self.inside(new_xyz)
         target = PoseStamped()
@@ -420,7 +437,13 @@ class Baxter:
                 "xyz_m": [p.x, p.y, p.z], "xyzw": [q.x, q.y, q.z, q.w],
                 "joint_targets_rad": solution, "open_gripper": action[6] >= 0.5}
 
-    def step(self, obs_id, spec, values):
+    def diagnostic_step(self, obs_id, spec, values):
+        """One arm-only diagnostic; deliberately never calls command_position."""
+        if self.cfg.get('commissioning_scope') != 'supervised_cartesian_diagnostic' or self.motion_remaining != 1:
+            raise RuntimeError('Diagnostic requires its own scope and exactly one remaining command')
+        return self.step(obs_id, spec, values, preserve_gripper=True)
+
+    def step(self, obs_id, spec, values, *, preserve_gripper=False):
         if not self.armed:
             raise RuntimeError("Bridge is read-only")
         remaining = getattr(self, "motion_remaining", None)
@@ -434,11 +457,12 @@ class Baxter:
         endpoint_before = self.endpoint_position()
         p = target.pose.position
         self.audit("dispatch", obs_id=obs_id, endpoint_before_m=endpoint_before,
-                   endpoint_target_m=[p.x,p.y,p.z], joint_target_rad=solution)
+                   endpoint_target_m=[p.x,p.y,p.z], joint_target_rad=solution,
+                   requested_action=action, preserve_gripper=preserve_gripper)
         try:
             self.move(solution, target)
             self.ready()
-            if not self.grip.command_position(100.0 if action[6] >= 0.5 else 0.0, block=True, timeout=2):
+            if not preserve_gripper and not self.grip.command_position(100.0 if action[6] >= 0.5 else 0.0, block=True, timeout=2):
                 raise RuntimeError("Gripper command timed out")
         except BaseException as error:
             try:
@@ -468,6 +492,7 @@ class Baxter:
         receipt['arrival_position_tolerance_m'] = self.cfg.get('arrival_position_tolerance_m',.01)
         receipt['arrival_rotation_tolerance_rad'] = CLEARANCE_ROTATION_TOLERANCE_RAD
         receipt['gripping'] = bool(self.grip.gripping())
+        receipt['preserve_gripper'] = preserve_gripper
         self.audit("applied", **receipt)
         return receipt
 
@@ -675,6 +700,7 @@ def main():
                     "env.scene_snapshot":robot.scene_snapshot})
     if cfg.get('commissioning_scope') != 'supervised_primitive_task':
         methods.update({"env.preview":robot.preview,"env.inspect":robot.inspect_action,"env.step":robot.step,
+                        "env.diagnostic_step":robot.diagnostic_step,
                         "env.step_chunk":robot.step_chunk,"env.preview_segment":robot.preview_segment,
                         "env.step_segment":robot.step_segment})
     try:

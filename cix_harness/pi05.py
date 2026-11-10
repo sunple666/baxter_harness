@@ -167,10 +167,16 @@ class Pi05:
         result = {'obs_id': obs['id'], 'action_spec': ACTION_SPEC, 'actions': converted[:count],
                   'model': 'pi05-libero', 'chunk_length': len(raw), 'seconds': round(time.monotonic()-start, 3),
                   'motion_ready': self.profile.get('commissioned') is True}
+        normalized = prepared['observation.state'][0].float().cpu().tolist()
+        result['state_diagnostic'] = {
+            'state8':state,
+            'normalized_state8':normalized,
+            'outside_token_interval_indices':[i for i,v in enumerate(normalized) if v < -1 or v > 1],
+            'note':'Distribution diagnostic only; values and checkpoint statistics are unchanged.'}
         record = {**result, 'task': task, 'state8': state, 'raw_libero_chunk': raw,
                   'profile': self.profile, 'checkpoint_revision': REVISION,
                   'diagnostic_seed': seed,
-                  'normalized_state8': prepared['observation.state'][0].float().cpu().tolist(),
+                  'normalized_state8': normalized,
                   'input_sha256': {key: hashlib.sha256(image_bytes(obs[key])).hexdigest()
                                    for key in ('image','wrist_image')},
                   'peak_allocated_gib': round(self.torch.cuda.max_memory_allocated()/2**30, 3)}

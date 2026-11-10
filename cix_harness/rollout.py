@@ -35,7 +35,8 @@ def predict_window(model, obs, subtask, count, record=None):
     actions = [action7(a) for a in actions]
     if record is not None:
         record('prediction', obs_id=obs['id'], actions=actions, subtask=subtask,
-               trace_file=prediction.get('trace_file'), model=prediction.get('model'))
+               trace_file=prediction.get('trace_file'), model=prediction.get('model'),
+               state_diagnostic=prediction.get('state_diagnostic'),seconds=prediction.get('seconds'))
     return actions
 
 

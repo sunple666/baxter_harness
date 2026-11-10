@@ -26,6 +26,24 @@ def rotate(q, xyz):
     return multiply(multiply(q, list(xyz)+[0]), [-q[0], -q[1], -q[2], q[3]])[:3]
 
 
+def tcp_offset(profile):
+    """Measured SDK-endpoint -> grasp-point offset in the SDK tool frame."""
+    return vector(profile.get('tcp_offset_tool_m', [0, 0, 0]), 3, 'TCP offset')
+
+
+def tcp_position(position, orientation, offset):
+    position = vector(position, 3, 'endpoint position')
+    shift = rotate(quaternion(orientation), vector(offset, 3, 'TCP offset'))
+    return [a+b for a,b in zip(position, shift)]
+
+
+def endpoint_for_tcp_delta(position, orientation, target_orientation, delta, offset):
+    """Keep the requested TCP delta while rotating the offset tool."""
+    start = tcp_position(position, orientation, offset)
+    shift = rotate(quaternion(target_orientation), vector(offset,3,'TCP offset'))
+    return [a+b-c for a,b,c in zip(start,vector(delta,3,'TCP delta'),shift)]
+
+
 def rotvec(q):
     q = quaternion(q)
     # LIBERO/robosuite quat2axisangle preserves angles above pi. Shortest-arc
@@ -40,7 +58,7 @@ def rotvec(q):
 def state8(state, profile):
     q = quaternion(profile['policy_from_base_xyzw'])
     translation = vector(profile['policy_from_base_translation_m'], 3, 'policy origin')
-    position = rotate(q, vector(state['eef_m'], 3, 'measured endpoint'))
+    position = rotate(q, tcp_position(state['eef_m'], state['eef_xyzw'], tcp_offset(profile)))
     orientation = multiply(multiply(q, quaternion(state['eef_xyzw'])),
                            quaternion(profile['tool_frame_offset_xyzw']))
     reference=profile.get('orientation_quaternion_reference_xyzw')

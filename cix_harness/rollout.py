@@ -7,6 +7,10 @@ from .contract import ACTION_SPEC, action7, vector
 def validate_motion_model(policy, robot):
     if policy.get("motion_ready", True) is not True:
         raise RuntimeError("The selected policy's embodiment/frame adapter is not commissioned")
+    expected_tcp = vector(policy.get('required_tcp_offset_tool_m',[0,0,0]),3,'policy TCP offset')
+    actual_tcp = vector(robot.get('tcp_offset_tool_m',[0,0,0]),3,'robot TCP offset')
+    if any(abs(a-b)>1e-8 for a,b in zip(expected_tcp,actual_tcp)):
+        raise RuntimeError('Robot and policy TCP offsets differ')
     expected = policy.get("required_policy_to_base_xyzw")
     if expected is not None:
         expected = vector(expected, 4, "policy rotation")

@@ -12,6 +12,8 @@ from .rpc import serve
 
 
 def validate_config(cfg, armed):
+    from .pi05_contract import tcp_offset
+    tcp_offset(cfg)
     offset=cfg.get('robot_clock_offset_s',0.0)
     if type(offset) not in (int,float) or not math.isfinite(offset) or abs(offset)>2:
         raise ValueError('Measured robot clock offset must be finite and within two seconds')
@@ -147,11 +149,13 @@ class Baxter:
                 "arm": self.cfg["arm"], "action_spec": ACTION_SPEC,
                 "policy_to_base_xyzw": self.cfg.get("policy_to_base_xyzw"),
                 "diagnostic_protocol": 1,
+                "tcp_offset_tool_m": self.cfg.get('tcp_offset_tool_m',[0,0,0]),
                 "diagnostic_config": {k:v for k,v in self.cfg.items() if k in (
                     'arm','commissioned','commissioning_scope','workspace_min_m','workspace_max_m',
                     'policy_to_base_xyzw','max_translation_m','max_rotation_rad','joint_speed_rad_s',
                     'max_observation_age_s','motion_budget','diagnostic_origin_m','diagnostic_radius_m',
-                    'robot_clock_offset_s','contact_guard','ik_solver','arrival_position_tolerance_m')}}
+                    'robot_clock_offset_s','contact_guard','ik_solver','arrival_position_tolerance_m',
+                    'tcp_offset_tool_m')}}
 
     def ready(self):
         if time.monotonic() >= getattr(self,'lease_end',math.inf):
@@ -281,6 +285,12 @@ class Baxter:
         rotation = tf.quaternion_from_euler(*limit_norm(action[3:6], self.cfg.get("max_rotation_rad", 0.05)))
         base_rotation = tf.quaternion_multiply(tf.quaternion_multiply(axis, rotation), tf.quaternion_inverse(axis))
         new_quat = tf.quaternion_multiply(base_rotation, orientation)
+        from .pi05_contract import tcp_offset, endpoint_for_tcp_delta
+        offset = tcp_offset(self.cfg)
+        new_xyz = np.asarray(endpoint_for_tcp_delta(xyz,orientation,list(map(float,new_quat)),
+                                                   list(map(float,delta)),offset))
+        if math.dist(xyz,new_xyz)>self.cfg.get('max_translation_m',.01)+1e-8:
+            raise ValueError('TCP compensation exceeds endpoint travel cap; use a smaller action')
         if project_table and self.cfg.get('contact_guard'):
             from .task_guard import contact_bounds
             floor=contact_bounds(self.cfg['contact_guard'],list(map(float,new_quat)))['minimum_eef_z_m']
@@ -291,6 +301,7 @@ class Baxter:
                    policy_to_base_xyzw=axis, base_delta_before_projection_m=list(map(float,delta)),
                    endpoint_before_m=xyz, endpoint_before_xyzw=orientation,
                    endpoint_target_m=list(map(float,new_xyz)), endpoint_target_xyzw=list(map(float,new_quat)),
+                   tcp_offset_tool_m=offset,
                    table_projection_requested=project_table)
         if enforce_workspace:
             self.inside(new_xyz)

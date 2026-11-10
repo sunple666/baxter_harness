@@ -1,11 +1,35 @@
 import math
 import unittest
 
-from cix_harness.pi05_contract import physical_delta, state8, rotvec
+from cix_harness.pi05_contract import physical_delta, state8, rotvec, tcp_position, endpoint_for_tcp_delta, tcp_offset
 from cix_harness.rollout import validate_motion_model
 
 
 class Pi05ContractTest(unittest.TestCase):
+    def test_tcp_rotation_preserves_grasp_point_and_requested_delta(self):
+        position=[.7,.1,.2];before=[0,0,0,1]
+        after=[0,math.sin(math.pi/4),0,math.cos(math.pi/4)]
+        offset=[0,0,.12];delta=[.01,-.02,.03]
+        endpoint=endpoint_for_tcp_delta(position,before,after,delta,offset)
+        start=tcp_position(position,before,offset)
+        end=tcp_position(endpoint,after,offset)
+        for a,b,d in zip(start,end,delta):self.assertAlmostEqual(b-a,d)
+
+    def test_tcp_state_uses_rotated_offset_before_policy_transform(self):
+        profile={'policy_from_base_xyzw':[0,0,0,1],
+                 'policy_from_base_translation_m':[0,0,0],
+                 'tool_frame_offset_xyzw':[0,0,0,1], 'tcp_offset_tool_m':[0,0,.12]}
+        state={'eef_m':[.7,.1,.2],'eef_xyzw':[0,1,0,0],'gripper_percent':50}
+        result=state8(state,profile)
+        for a,b in zip(result[:3],[.7,.1,.08]):self.assertAlmostEqual(a,b)
+        with self.assertRaises(ValueError):tcp_offset({'tcp_offset_tool_m':[0,0,float('nan')]})
+
+    def test_tcp_mismatch_blocks_execution_including_older_bridge(self):
+        p={'motion_ready':True,'required_tcp_offset_tool_m':[0,0,.12]}
+        with self.assertRaisesRegex(RuntimeError,'TCP'):validate_motion_model(p,{})
+        validate_motion_model(p,{'tcp_offset_tool_m':[0,0,.12]})
+        with self.assertRaisesRegex(RuntimeError,'TCP'):
+            validate_motion_model({'motion_ready':True},{'tcp_offset_tool_m':[0,0,.12]})
     def test_libero_rotation_vector_preserves_branch_above_pi(self):
         angle=math.pi+.04
         result=rotvec([math.sin(angle/2),0,0,math.cos(angle/2)])

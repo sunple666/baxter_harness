@@ -8,7 +8,7 @@ from pathlib import Path
 import time
 
 from .contract import ACTION_SPEC, image_bytes, instruction
-from .pi05_contract import physical_delta, quaternion, state8
+from .pi05_contract import physical_delta, quaternion, state8, tcp_offset
 from .rpc import serve
 
 REVISION = '9ba5431256f4136a01c224ab0307b0d3035cc92c'
@@ -85,6 +85,7 @@ class Pi05:
         self.warmed = False
         quaternion(self.profile['policy_from_base_xyzw'])
         quaternion(self.profile['tool_frame_offset_xyzw'])
+        tcp_offset(self.profile)
         self.logs = Path(log_dir)
         self.logs.mkdir(parents=True, exist_ok=True)
         if not torch.cuda.is_available():
@@ -115,6 +116,7 @@ class Pi05:
                 'motion_ready': self.profile.get('commissioned') is True,
                 'motion_scope': self.profile.get('commissioning_scope', 'task_workspace'),
                 'required_policy_to_base_xyzw': [-q[0], -q[1], -q[2], q[3]],
+                'required_tcp_offset_tool_m': tcp_offset(self.profile),
                 'adaptation': 'LIBERO OSC_POSE to physical xyz/rpy/open-fraction; bounded receding horizon',
                 'allocated_gib': round(self.torch.cuda.memory_allocated()/2**30, 3)}
 
@@ -192,6 +194,7 @@ class Pi05:
         profile=json.loads(self.profile_file.read_text())
         quaternion(profile['policy_from_base_xyzw'])
         quaternion(profile['tool_frame_offset_xyzw'])
+        tcp_offset(profile)
         self.profile=profile
         return self.health()
 

@@ -1,0 +1,9 @@
+{
+  "reference_definition": "REPLACE: record how paired TCP points and policy axes/origin were defined; do not choose them merely to match model statistics.",
+  "base_tcp_points_m": [null, null, null, null],
+  "policy_points_m": [null, null, null, null],
+  "sdk_reference_xyzw": null,
+  "policy_reference_xyzw": null,
+  "tcp_offset_tool_m": null,
+  "max_residual_m": 0.003
+}

@@ -1,5 +1,17 @@
 # 板端 π0.5 + Baxter 单动作诊断
 
+## 构造候选坐标映射（纯离线）
+
+`python3 -m cix_harness.frame_map --references config/frame-references.local.json --output runs/frame-candidate.local.json`
+
+先复制 config/frame-references.example.json，填入有明确来源的参考数据；模板 null 故意不能直接运行。base_tcp_points_m 必须是实际 TCP 的 base 坐标，不是 SDK endpoint，不可直接混用相机坐标或贴桌末端记录。policy_points_m 是同一参考点在明确定义的策略任务坐标系中的坐标，不能仅为使归一化状态落入范围而构造。
+
+至少三点：第一点为参考、第二点定义方向、第三点不共线；前两点间距与第三点到基线距离均需至少 2 cm，减少病态。前三点构造右手刚体变换，不调整尺度或拟合镜像。建议再提供独立验证点；输出包含全部残差，默认超过 3 mm 拒绝，但这个阈值只是参考数据一致性检查，不是 Baxter 精度保证。仅三点或共面点不能排除所有错误对应和镜像语义。
+
+sdk_reference_xyzw 是参考姿态下实测 SDK 工具朝向；policy_reference_xyzw 是同一物理姿态在已核验策略工具约定中的表示。工具旋转由这两个约定和位置坐标变换计算，不搜索让模型输出更好看的角度。没有确认策略约定时，不能把训练均值当作目标姿态。
+
+输出是报告，policy_profile 和 bridge_candidate 分别给出互逆位置旋转及相同 TCP；两者都 commissioned=false。它不会连接设备、更新活动配置或执行动作，也不会自动校准相机。先审查候选，再用录制观测复算状态与动作；几何自洽不等于零样本迁移成立。
+
 ## TCP 适配（默认保持旧行为）
 
 策略 profile 和机器人桥配置现在都支持可选 `tcp_offset_tool_m`：SDK endpoint 到实际抓取参考点的向量，单位米，表达在 SDK 工具坐标系。缺省为零，不填猜测值。模型 state8 使用该点；控制桥按目标姿态反算 SDK endpoint，使旋转时仍满足该 TCP 的平移要求。它不是 `tool_frame_offset_xyzw`（姿态约定），也不是 camera→base 外参。

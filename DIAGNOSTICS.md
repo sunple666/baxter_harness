@@ -2,6 +2,8 @@
 
 ## 构造候选坐标映射（纯离线）
 
+若目前只有一个参考点，可用 `frame_map --mode anchor`：输入 base_anchor_m、policy_anchor_m、明确假设的 policy_from_base_xyzw、tcp_offset_tool_m 和 reference_definition，工具仅计算 t=policy_anchor-R*base_anchor，绝不声称由一个点标定旋转。tool_frame_offset_xyzw 可单独指定，默认不额外旋转。已知真实距离保持不变，不做缩放。LIBERO 不同场景的桌高与原点可能不同，必须声明选定场景，不能把单一桌高当成整个混合检查点的通用值。
+
 `python3 -m cix_harness.frame_map --references config/frame-references.local.json --output runs/frame-candidate.local.json`
 
 先复制 config/frame-references.example.json，填入有明确来源的参考数据；模板 null 故意不能直接运行。base_tcp_points_m 必须是实际 TCP 的 base 坐标，不是 SDK endpoint，不可直接混用相机坐标或贴桌末端记录。policy_points_m 是同一参考点在明确定义的策略任务坐标系中的坐标，不能仅为使归一化状态落入范围而构造。

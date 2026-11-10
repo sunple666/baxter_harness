@@ -1,10 +1,20 @@
 import math
 import unittest
-from cix_harness.frame_map import build
+from cix_harness.frame_map import build,build_anchor
 from cix_harness.pi05_contract import rotate,state8
 
 
 class FrameMapTest(unittest.TestCase):
+    def test_single_anchor_preserves_axes_and_relative_distances(self):
+        d={'reference_definition':'Synthetic hypothesis', 'base_anchor_m':[.8,.1,-.18],
+           'policy_anchor_m':[0,0,.9],'policy_from_base_xyzw':[0,0,0,1],
+           'tcp_offset_tool_m':[0,0,.012]}
+        r=build_anchor(d);p=r['policy_profile']
+        actual=[a+b for a,b in zip(rotate(p['policy_from_base_xyzw'],d['base_anchor_m']),p['policy_from_base_translation_m'])]
+        for a,b in zip(actual,d['policy_anchor_m']):self.assertAlmostEqual(a,b)
+        self.assertFalse(p['commissioned'])
+        d['policy_from_base_xyzw']=[0,0,0,2]
+        with self.assertRaises(ValueError):build_anchor(d)
     def references(self):
         return {'reference_definition':'Synthetic correspondences for tests only',
             'base_tcp_points_m':[[0,0,0],[.1,0,0],[0,.1,0],[0,0,.1]],

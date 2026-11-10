@@ -76,16 +76,36 @@ def build(data):
             'limitations':'Geometric consistency only. Does not establish camera alignment, policy transfer, TCP accuracy or motion permission.'}
 
 
+def build_anchor(data):
+    """Translation from one anchor, with rotation explicitly supplied, never fitted."""
+    evidence=instruction(data['reference_definition'])
+    q=quaternion(data['policy_from_base_xyzw'])
+    base=vector(data['base_anchor_m'],3,'base anchor')
+    policy=vector(data['policy_anchor_m'],3,'policy anchor')
+    tcp=vector(data['tcp_offset_tool_m'],3,'TCP offset')
+    tool=quaternion(data.get('tool_frame_offset_xyzw',[0,0,0,1]))
+    t=sub(policy,rotate(q,base))
+    return {'policy_profile':{'commissioned':False,'policy_from_base_xyzw':q,
+                'policy_from_base_translation_m':t,'tcp_offset_tool_m':tcp,
+                'tool_frame_offset_xyzw':tool,
+                'notes':'UNVERIFIED SINGLE-ANCHOR HYPOTHESIS. '+evidence},
+            'bridge_candidate':{'commissioned':False,'policy_to_base_xyzw':[-q[0],-q[1],-q[2],q[3]],
+                                'tcp_offset_tool_m':tcp},
+            'reference_definition':evidence,'base_anchor_m':base,'policy_anchor_m':policy,
+            'limitations':'One point determines translation only with assumed rotation. No rotation, scale, camera alignment, transfer or motion validity established.'}
+
+
 def main(argv=None):
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--references',required=True,help='Local JSON with paired TCP references and explicit tool conventions')
+    p.add_argument('--mode',choices=['references','anchor'],default='references')
     p.add_argument('--output',required=True,help='New local report file; existing files are never overwritten')
     args=p.parse_args(argv)
-    result=build(json.loads(Path(args.references).read_text(encoding='utf-8')))
+    result=(build_anchor if args.mode=='anchor' else build)(json.loads(Path(args.references).read_text(encoding='utf-8')))
     with Path(args.output).open('x',encoding='utf-8') as f:
         json.dump(result,f,ensure_ascii=False,indent=2)
-    print(json.dumps({'point_residuals_m':result['point_residuals_m'],
-                      'extra_validation_points':result['extra_validation_points'],'commissioned':False}))
+    print(json.dumps({'mode':args.mode,'point_residuals_m':result.get('point_residuals_m'),
+                      'extra_validation_points':result.get('extra_validation_points'),'commissioned':False}))
 
 
 if __name__=='__main__':main()

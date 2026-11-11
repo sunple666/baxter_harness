@@ -18,3 +18,30 @@ metabb-*.txt
 
 # Recorded lab images, calibration and telemetry remain local.
 examples/
+
+# Personal assistant rules and local editor/workspace settings.
+/[Aa][Gg][Ee][Nn][Tt][Ss].md
+/[Aa][Gg][Ee][Nn][Tt].md
+/AGENTS.local.md
+/.codex/
+/.agents/
+/.vscode/
+/.idea/
+
+# Private handover notes, experiment records, and unadopted research drafts.
+/项目完整交接.md
+/实验记录/
+/实验记录.md
+/组会要点.md
+/tmp/
+/integrations/dream1/
+
+# Generated evidence and model binaries; keep these in the experiment archive.
+*.log
+*.mp4
+*.avi
+*.mov
+*.webm
+*.safetensors
+*.pt
+*.pth
